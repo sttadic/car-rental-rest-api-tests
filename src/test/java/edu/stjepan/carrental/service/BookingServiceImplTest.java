@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import edu.stjepan.carrental.dto.*;
 import edu.stjepan.carrental.entity.*;
+import edu.stjepan.carrental.exception.ResourceNotFoundException;
 import edu.stjepan.carrental.repository.*;
 import edu.stjepan.carrental.service.impl.BookingServiceImpl;
 
@@ -74,6 +75,68 @@ class BookingServiceImplTest {
 
 		verify(carRepository, times(1)).findById(1L);
 		verify(bookingRepository, times(1)).save(any(Booking.class));
+	}
+
+	@Test
+	void createBooking_whenCarDoesNotExist_shouldThrowResourceNotFoundException() throws Exception {
+		CreateBookingRequest request = new CreateBookingRequest();
+		setField(request, "carId", 999L);
+		setField(request, "customerName", "John Doe");
+		setField(request, "customerEmail", "john.doe@example.com");
+		setField(request, "startDate", LocalDate.of(2025, 8, 1));
+		setField(request, "endDate", LocalDate.of(2025, 8, 3));
+		setField(request, "status", "CREATED");
+
+		when(carRepository.findById(999L)).thenReturn(Optional.empty());
+
+		ResourceNotFoundException exception = assertThrows(
+				ResourceNotFoundException.class,
+				() -> bookingService.createBooking(request));
+
+		assertEquals("Car not found with id: 999", exception.getMessage());
+		verify(bookingRepository, never()).save(any(Booking.class));
+	}
+
+	@Test
+	void createBooking_whenEndDateBeforeStartDate_shouldThrowIllegalArgumentException() throws Exception {
+		CreateBookingRequest request = new CreateBookingRequest();
+		setField(request, "carId", 1L);
+		setField(request, "customerName", "John Doe");
+		setField(request, "customerEmail", "john.doe@example.com");
+		setField(request, "startDate", LocalDate.of(2025, 8, 5));
+		setField(request, "endDate", LocalDate.of(2025, 8, 1));
+		setField(request, "status", "CREATED");
+
+		when(carRepository.findById(1L)).thenReturn(Optional.of(car));
+
+		IllegalArgumentException exception = assertThrows(
+				IllegalArgumentException.class,
+				() -> bookingService.createBooking(request));
+
+		assertEquals("End date cannot be before start date.", exception.getMessage());
+		verify(bookingRepository, never()).save(any(Booking.class));
+	}
+
+	@Test
+	void createBooking_whenStartDateEqualsEndDate_shouldThrowIllegalArgumentException() throws Exception {
+		LocalDate sameDate = LocalDate.of(2025, 8, 1);
+
+		CreateBookingRequest request = new CreateBookingRequest();
+		setField(request, "carId", 1L);
+		setField(request, "customerName", "John Doe");
+		setField(request, "customerEmail", "john.doe@example.com");
+		setField(request, "startDate", sameDate);
+		setField(request, "endDate", sameDate);
+		setField(request, "status", "CREATED");
+
+		when(carRepository.findById(1L)).thenReturn(Optional.of(car));
+
+		IllegalArgumentException exception = assertThrows(
+				IllegalArgumentException.class,
+				() -> bookingService.createBooking(request));
+
+		assertEquals("Booking must be at least 1 day.", exception.getMessage());
+		verify(bookingRepository, never()).save(any(Booking.class));
 	}
 
 	private void setField(Object target, String fieldName, Object value)
